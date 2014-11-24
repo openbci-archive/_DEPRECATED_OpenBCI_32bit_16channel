@@ -84,7 +84,6 @@ void setup(void) {
   pinMode(LED, OUTPUT); digitalWrite(LED,HIGH);    // blue LED
   pinMode(PGCpin,OUTPUT); digitalWrite(PGCpin,LOW);// used to tell RFduino if we are in bootloader mode
   delay(1000);
-  Serial0.println("OpenBCI 32bit 16 channel bitches!");
   
   OBCI.useAccel = true;  // option to add accelerometer dat to stream
   OBCI.useAux = false;   // option to add user data to stream not implimented yet
