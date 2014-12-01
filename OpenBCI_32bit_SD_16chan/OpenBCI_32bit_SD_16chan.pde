@@ -111,7 +111,7 @@ void loop() {
           Serial0.println(OBCI.sampleCounter,HEX); // verbosity
         }
       }  
-//      OBCI.sendChannelData();  // serial fire hose
+      OBCI.sendChannelData();  // serial fire hose
   }
   
 eventSerial();
