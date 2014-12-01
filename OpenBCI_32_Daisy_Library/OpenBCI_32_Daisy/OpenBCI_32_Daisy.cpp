@@ -502,14 +502,14 @@ void OpenBCI_32_Daisy::changeChannelLeadOffDetect(byte N) // NEEDS DAISY? OR IS 
   
   for(int i=startChan; i<endChan ;i++){
     if(leadOffSettings[i][PCHAN] == ON){
-      bitSet(P_setting,i);
+      bitSet(P_setting,i-startChan);
     }else{
-      bitClear(P_setting,i);
+      bitClear(P_setting,i-startChan);
     }
     if(leadOffSettings[i][NCHAN] == ON){
-      bitSet(N_setting,i);
+      bitSet(N_setting,i-startChan);
     }else{
-      bitClear(N_setting,i);
+      bitClear(N_setting,i-startChan);
     }
    WREG(LOFF_SENSP,P_setting,targetSS);
    WREG(LOFF_SENSN,N_setting,targetSS);
@@ -586,8 +586,8 @@ void OpenBCI_32_Daisy::updateBoardData(){
   int byteCounter = 0;
 
   if(daisyPresent && !firstDataPacket){
-    for(int i=0; i<24; i++){  // shift and average the byte arrays
-      lastBoardDataRaw[i] = boardChannelDataRaw[i]; // remember the last samples
+    for(int i=0; i<8; i++){  // shift and average the byte arrays
+      lastBoardChannelDataInt[i] = boardChannelDataInt[i]; // remember the last samples
     }
   }
   csLow(BOARD_ADS);       //  open SPI
@@ -612,11 +612,18 @@ void OpenBCI_32_Daisy::updateBoardData(){
       boardChannelDataInt[i] &= 0x00FFFFFF;
     }
   }
-  // if(sampleCounter % 2 != 0){ // send averaged data on odd samplecounter
-    for(int i=0; i<24; i++){  // why not just do this every time?
-      meanBoardDataRaw[i] = (lastBoardDataRaw[i] + boardChannelDataRaw[i])/2;
+  if(daisyPresent && !firstDataPacket){
+    byteCounter = 0;
+    for(int i=0; i<8; i++){
+      meanBoardChannelDataInt[i] = (lastBoardChannelDataInt[i] + boardChannelDataInt[i])/2;
+    }
+    for(int i=0; i<8; i++){  // place the average values in the meanRaw array
+      for(int b=2; b>=0; b--){
+        meanBoardDataRaw[byteCounter] = (meanBoardChannelDataInt[i] >> (b*8)) & 0xFF;
+        byteCounter++;
+      }
     }     // the function that sends data to the radio will look for odd/even sampleCounter
-  // }
+  }
     
   if(firstDataPacket == true){firstDataPacket = false;}
 }
@@ -627,7 +634,7 @@ void OpenBCI_32_Daisy::updateDaisyData(){
     
     if(daisyPresent && !firstDataPacket){
       for(int i=0; i<24; i++){  // shift and average the byte arrays
-        lastDaisyDataRaw[i] = daisyChannelDataRaw[i]; // remember the last samples
+        lastDaisyChannelDataInt[i] = daisyChannelDataInt[i]; // remember the last samples
       }
     }
 
@@ -653,11 +660,18 @@ void OpenBCI_32_Daisy::updateDaisyData(){
       daisyChannelDataInt[i] &= 0x00FFFFFF;
     }
   }
-  // if(sampleCounter % 2 == 0){ // send averaged data on even samplecounter
-    for(int i=0; i<24; i++){  // why not just do this every time?
-      meanDaisyDataRaw[i] = (lastDaisyDataRaw[i] + daisyChannelDataRaw[i])/2;
+  if(daisyPresent && !firstDataPacket){
+    byteCounter = 0;
+    for(int i=0; i<8; i++){
+      meanDaisyChannelDataInt[i] = (lastDaisyChannelDataInt[i] + daisyChannelDataInt[i])/2;
+    }
+    for(int i=0; i<8; i++){  // place the average values in the meanRaw array
+      for(int b=2; b>=0; b--){
+        meanDaisyDataRaw[byteCounter] = (meanDaisyChannelDataInt[i] >> (b*8)) & 0xFF;
+        byteCounter++;
+      }
     }     // the function that sends data to the radio will look for odd/even sampleCounter
-  // }  
+  }  
     
   if(firstDataPacket == true){firstDataPacket = false;}
 }

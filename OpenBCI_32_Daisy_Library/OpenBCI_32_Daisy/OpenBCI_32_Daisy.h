@@ -79,7 +79,11 @@ public:
     int boardStat;           // used to hold the status register
     int daisyStat;
     int boardChannelDataInt[8];    // array used when reading channel data as ints
-    int daisyChannelDataInt[8];
+    int lastBoardChannelDataInt[8];
+    int meanBoardChannelDataInt[8];
+    int daisyChannelDataInt[8];    // array used when reading channel data as ints
+    int lastDaisyChannelDataInt[8];
+    int meanDaisyChannelDataInt[8];
     int numChannels;
     char channelSettings[16][6];  // array to hold current channel settings
     // char daisyChannelSettings[8][6];
