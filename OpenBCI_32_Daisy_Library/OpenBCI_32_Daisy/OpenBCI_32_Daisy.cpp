@@ -103,11 +103,7 @@ void OpenBCI_32_Daisy::csHigh(int SS)
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<  ADS1299 FUNCTIONS >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 
 
-// void OpenBCI_32_Daisy::initialize(int _DRDY, int _RST, int _CS){
 void OpenBCI_32_Daisy::initialize_ads(){
-  // needs to find out if there is a daisy connected and 'know' that it is there. 
-  // this will be easy to do by reading the device ID.
-  // NEEDS TO REPEAT SETTINGS COMMAND AND MEMORY FOR DAISY
 // recommended power up sequence requiers Tpor (~32mS)	
     delay(50);				
     pinMode(ADS_RST,OUTPUT);  
@@ -124,7 +120,7 @@ void OpenBCI_32_Daisy::initialize_ads(){
     delay(40);
     resetADS(DAISY_ADS); // software reset daisy module if present
     delay(10);
-    daisyPresent = smellDaisy(); 
+    daisyPresent = smellDaisy(); // check to see if daisy module is present
     if(!daisyPresent){
       WREG(CONFIG1,0x96,BOARD_ADS); // turn off clk output if no daisy present
       numChannels = 8;    // expect up to 8 ADS channels
@@ -139,6 +135,7 @@ void OpenBCI_32_Daisy::initialize_ads(){
     defaultChannelSettings[BIAS_SET] = YES;    // add this channel to bias generation
     defaultChannelSettings[SRB2_SET] = YES;       // connect this P side to SRB2
     defaultChannelSettings[SRB1_SET] = NO;        // don't use SRB1
+
     for(int i=0; i<numChannels; i++){
       for(int j=0; j<6; j++){
         channelSettings[i][j] = defaultChannelSettings[j];  // assign default settings
@@ -157,7 +154,7 @@ void OpenBCI_32_Daisy::initialize_ads(){
     }
     verbosity = false;      // when verbosity is true, there will be Serial feedback
     firstDataPacket = true;
-};
+}
 
 boolean OpenBCI_32_Daisy::smellDaisy(void){ // check if daisy present
   boolean isDaisy = false;
@@ -208,27 +205,27 @@ void OpenBCI_32_Daisy::resetADS(int targetSS) //  NEEDS DAISY??
   for (int chan=startChan; chan <= stopChan; chan++) {
     deactivateChannel(chan);
   } 
-};
+}
 
 void OpenBCI_32_Daisy::setChannelsToDefault(void){  // NEEDS DAISY
   for(int i=0; i<numChannels; i++){
     for(int j=0; j<6; j++){
       channelSettings[i][j] = defaultChannelSettings[j];
     }
+    useInBias[i] = true;    // keeping track of Bias Generation
+    useSRB2[i] = true;      // keeping track of SRB2 inclusion
   }
-
+  boardUseSRB1 = daisyUseSRB1 = false;
   writeChannelSettings();       // write settings to on-board ADS
+
   for(int i=0; i<numChannels; i++){   // turn off the impedance measure signal
     leadOffSettings[i][PCHAN] = OFF;
     leadOffSettings[i][NCHAN] = OFF;
   }
-
   changeChannelLeadOffDetect(); // write settings to all ADS
-  for(int i=0; i<numChannels; i++){
-    channelSettings[i][SRB1_SET] = NO;
-  }
-  WREG(MISC1,0x00,BOARD_ADS);  // open SRB1 switch on-board
 
+  
+  WREG(MISC1,0x00,BOARD_ADS);  // open SRB1 switch on-board
   if(daisyPresent){ WREG(MISC1,0x00,DAISY_ADS); } // open SRB1 switch on-daisy
 }
 
@@ -249,10 +246,10 @@ void OpenBCI_32_Daisy::writeChannelSettings(){
   boolean use_SRB1 = false;
   byte setting, startChan, endChan, targetSS;  
 
-  for(int i=0; i<2; i++){
-    if(i == 0){ targetSS = BOARD_ADS; startChan = 0; endChan = 8; }
-    if(i == 1){ 
-      if(!daisyPresent){ return; }
+  for(int b=0; b<2; i++){
+    if(b == 0){ targetSS = BOARD_ADS; startChan = 0; endChan = 8; }
+    if(b == 1){ 
+      if(daisyPresent == false){ return; }
       targetSS = DAISY_ADS; startChan = 8; endChan = 16;
     }
   
@@ -260,7 +257,7 @@ void OpenBCI_32_Daisy::writeChannelSettings(){
 
     for(byte i=startChan; i<endChan; i++){ // write 8 channel settings
       setting = 0x00;
-      if(channelSettings[i][POWER_DOWN] == YES) setting |= 0x80;
+      if(channelSettings[i][POWER_DOWN] == YES){setting |= 0x80;}
       setting |= channelSettings[i][GAIN_SET]; // gain
       setting |= channelSettings[i][INPUT_TYPE_SET]; // input code
       if(channelSettings[i][SRB2_SET] == YES){
@@ -269,7 +266,7 @@ void OpenBCI_32_Daisy::writeChannelSettings(){
       }else{
         useSRB2[i] = false; // rememver SRB2 state for this channel
       }
-      WREG(CH1SET+i-startChan,setting,targetSS);  // write this channel's register settings
+      WREG(CH1SET+(i-startChan),setting,targetSS);  // write this channel's register settings
       
       // add or remove this channel from inclusion in BIAS generation
       setting = RREG(BIAS_SENSP,targetSS);       //get the current P bias settings
@@ -335,7 +332,7 @@ void OpenBCI_32_Daisy::writeChannelSettings(byte N){  // NEEDS DAISY contingent 
   }else{
     useSRB2[N] = false;
   }
-  WREG(CH1SET+N-startChan, setting, targetSS);  // write this channel's register settings
+  WREG(CH1SET+(N-startChan), setting, targetSS);  // write this channel's register settings
 
   // add or remove from inclusion in BIAS generation
   setting = RREG(BIAS_SENSP,targetSS);       //get the current P bias settings
@@ -376,7 +373,7 @@ void OpenBCI_32_Daisy::writeChannelSettings(byte N){  // NEEDS DAISY contingent 
 }
 
 //  deactivate the given channel.
-void OpenBCI_32_Daisy::deactivateChannel(byte N) // NEEDS DAISY
+void OpenBCI_32_Daisy::deactivateChannel(byte N) 
 {
   byte setting, startChan, endChan, targetSS;  
   if(N < 9){
@@ -391,10 +388,10 @@ void OpenBCI_32_Daisy::deactivateChannel(byte N) // NEEDS DAISY
   //shut down the channel
   N = constrain(N-1,startChan,endChan-1);  //subtracts 1 so that we're counting from 0, not 1
 
-  setting = RREG(CH1SET+N-startChan,targetSS); delay(1); // get the current channel settings
-  bitSet(setting,7);              // set bit7 to shut down channel
-  if (channelSettings[N][SRB2_SET] == YES) {bitClear(setting,3);}    // clear bit3 to disclude from SRB2 if used
-  WREG(CH1SET+N-startChan,setting,targetSS); delay(1);     // write the new value to disable the channel
+  setting = RREG(CH1SET+(N-startChan),targetSS); delay(1); // get the current channel settings
+  bitSet(setting,7);     // set bit7 to shut down channel
+  bitClear(setting,3);   // clear bit3 to disclude from SRB2 if used
+  WREG(CH1SET+(N-startChan),setting,targetSS); delay(1);     // write the new value to disable the channel
   
   //remove the channel from the bias generation...
   setting = RREG(BIAS_SENSP,targetSS); delay(1); //get the current bias settings
@@ -407,7 +404,7 @@ void OpenBCI_32_Daisy::deactivateChannel(byte N) // NEEDS DAISY
   
   leadOffSettings[N][0] = leadOffSettings[N][1] = NO;
   changeChannelLeadOffDetect(N+1);
-}; 
+} 
 
 void OpenBCI_32_Daisy::activateChannel(byte N) // NEEDS DAISY? OR IS IT LOW-LEVEL? PASSED IN AS PARAMETER?
 {
@@ -419,22 +416,24 @@ void OpenBCI_32_Daisy::activateChannel(byte N) // NEEDS DAISY? OR IS IT LOW-LEVE
     targetSS = DAISY_ADS; startChan = 8; endChan = 16;
   }
 
-  N = constrain(N-1,startChan,endChan-1);  
+  N = constrain(N-1,startChan,endChan-1);  // 0-7 or 8-15
   //proceed...first, disable any data collection
-  SDATAC(targetSS); delay(1);      // exit Read Data Continuous mode to communicate with ADS
+  SDATAC(targetSS);  // exit Read Data Continuous mode to communicate with ADS
   setting = 0x00;
   setting |= channelSettings[N][GAIN_SET]; // gain
   setting |= channelSettings[N][INPUT_TYPE_SET]; // input code
   if(useSRB2[N] == true){channelSettings[N][SRB2_SET] = YES;}else{channelSettings[N][SRB2_SET] = NO;}
-  if(channelSettings[N][SRB2_SET] == YES) bitSet(setting,3); // close this SRB2 switch
-  WREG(CH1SET+N-startChan,setting,targetSS);
+  if(channelSettings[N][SRB2_SET] == YES) {bitSet(setting,3);} // close this SRB2 switch
+  WREG(CH1SET+(N-startChan),setting,targetSS);
   // add or remove from inclusion in BIAS generation
   if(useInBias[N]){channelSettings[N][BIAS_SET] = YES;}else{channelSettings[N][BIAS_SET] = NO;}
   setting = RREG(BIAS_SENSP,targetSS);       //get the current P bias settings
   if(channelSettings[N][BIAS_SET] == YES){
     bitSet(setting,N-startChan);    //set this channel's bit to add it to the bias generation
+    useInBias[N] = true;
   }else{
     bitClear(setting,N-startChan);  // clear this channel's bit to remove from bias generation
+    useInBias[N] = false;
   }
   WREG(BIAS_SENSP,setting,targetSS); delay(1); //send the modified byte back to the ADS
   setting = RREG(BIAS_SENSN,targetSS);       //get the current N bias settings
@@ -449,16 +448,16 @@ void OpenBCI_32_Daisy::activateChannel(byte N) // NEEDS DAISY? OR IS IT LOW-LEVE
   if(targetSS == BOARD_ADS && boardUseSRB1 == true) setting = 0x20;
   if(targetSS == DAISY_ADS && daisyUseSRB1 == true) setting = 0x20;
   WREG(MISC1,setting,targetSS);     // close all SRB1 swtiches
-};
+}
 
 // change the lead off detect settings for all channels
 void OpenBCI_32_Daisy::changeChannelLeadOffDetect() // NEEDS DAISY? OR IS IT LOW-LEVEL? PASSED IN AS PARAMETER?
 {
   byte setting, startChan, endChan, targetSS;  
 
-  for(int i=0; i<2; i++){
-    if(i == 0){ targetSS = BOARD_ADS; startChan = 0; endChan = 8; }
-    if(i == 1){ 
+  for(int b=0; i<2; i++){
+    if(b == 0){ targetSS = BOARD_ADS; startChan = 0; endChan = 8; }
+    if(b == 1){ 
       if(!daisyPresent){ return; }
       targetSS = DAISY_ADS; startChan = 8; endChan = 16;
     }
@@ -482,7 +481,7 @@ void OpenBCI_32_Daisy::changeChannelLeadOffDetect() // NEEDS DAISY? OR IS IT LOW
      WREG(LOFF_SENSN,N_setting,targetSS);
     }
   }
-}; 
+}
 
 // change the lead off detect settings for specified channel
 void OpenBCI_32_Daisy::changeChannelLeadOffDetect(byte N) // NEEDS DAISY? OR IS IT LOW-LEVEL? PASSED IN AS PARAMETER?
@@ -514,7 +513,7 @@ void OpenBCI_32_Daisy::changeChannelLeadOffDetect(byte N) // NEEDS DAISY? OR IS 
    WREG(LOFF_SENSP,P_setting,targetSS);
    WREG(LOFF_SENSN,N_setting,targetSS);
   }
-}; 
+} 
 
 void OpenBCI_32_Daisy::configureLeadOffDetection(byte amplitudeCode, byte freqCode) 
 {
@@ -545,7 +544,7 @@ void OpenBCI_32_Daisy::configureInternalTestSignal(byte amplitudeCode, byte freq
   for(int i=0; i<2; i++){
     if(i == 0){ targetSS = BOARD_ADS; startChan = 0; endChan = 8; }
     if(i == 1){ 
-      if(!daisyPresent){ return; }
+      if(daisyPresent == false){ return; }
       targetSS = DAISY_ADS; startChan = 8; endChan = 16;
     }
   	if (amplitudeCode == ADSTESTSIG_NOCHANGE) amplitudeCode = (RREG(CONFIG2,targetSS) & (0b00000100));
@@ -767,13 +766,13 @@ void OpenBCI_32_Daisy::RDATAC(int targetSS) {
     csLow(targetSS);
     xfer(_RDATAC);      // read data continuous
     csHigh(targetSS);
-  delayMicroseconds(3);   
+    delayMicroseconds(3);   
 }
 void OpenBCI_32_Daisy::SDATAC(int targetSS) {
     csLow(targetSS);
     xfer(_SDATAC);
     csHigh(targetSS);
-  delayMicroseconds(3);   //must wait 4 tCLK cycles after executing this command (Datasheet, pg. 37)
+    delayMicroseconds(10);   //must wait at least 4 tCLK cycles after executing this command (Datasheet, pg. 37)
 }
 
 
