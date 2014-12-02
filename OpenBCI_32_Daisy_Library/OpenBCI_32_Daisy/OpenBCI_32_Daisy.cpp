@@ -216,6 +216,7 @@ void OpenBCI_32_Daisy::setChannelsToDefault(void){  // NEEDS DAISY
     useSRB2[i] = true;      // keeping track of SRB2 inclusion
   }
   boardUseSRB1 = daisyUseSRB1 = false;
+
   writeChannelSettings();       // write settings to on-board ADS
 
   for(int i=0; i<numChannels; i++){   // turn off the impedance measure signal
@@ -246,10 +247,10 @@ void OpenBCI_32_Daisy::writeChannelSettings(){
   boolean use_SRB1 = false;
   byte setting, startChan, endChan, targetSS;  
 
-  for(int b=0; b<2; i++){
+  for(int b=0; b<2; b++){
     if(b == 0){ targetSS = BOARD_ADS; startChan = 0; endChan = 8; }
     if(b == 1){ 
-      if(daisyPresent == false){ return; }
+      if(!daisyPresent){ return; }
       targetSS = DAISY_ADS; startChan = 8; endChan = 16;
     }
   
@@ -289,22 +290,22 @@ void OpenBCI_32_Daisy::writeChannelSettings(){
         use_SRB1 = true;  // if any of the channel setting closes SRB1, it is closed for all
       }
     } // end of CHnSET and BIAS settings
+  } // end of board select loop
     if(use_SRB1){
       for(int i=startChan; i<endChan; i++){
         channelSettings[i][SRB1_SET] = YES;
       }
       WREG(MISC1,0x20,targetSS);     // close SRB1 swtich
-      if(targetSS == BOARD_ADS){ boardUseSRB1 = true;
-        }else{ daisyUseSRB1 = true; }
+      if(targetSS == BOARD_ADS){ boardUseSRB1 = true; }
+      if(targetSS == DAISY_ADS){ daisyUseSRB1 = true; }
     }else{
       for(int i=startChan; i<endChan; i++){
         channelSettings[i][SRB1_SET] = NO;
       }
       WREG(MISC1,0x00,targetSS);    // open SRB1 switch
-      if(targetSS == BOARD_ADS){ boardUseSRB1 = false;
-        }else{ daisyUseSRB1 = false; }
+      if(targetSS == BOARD_ADS){ boardUseSRB1 = false; }
+      if(targetSS == DAISY_ADS){ daisyUseSRB1 = false; }
     }
-  }
 }
 
 // write settings for a SPECIFIC channel on a given ADS board
@@ -455,7 +456,7 @@ void OpenBCI_32_Daisy::changeChannelLeadOffDetect() // NEEDS DAISY? OR IS IT LOW
 {
   byte setting, startChan, endChan, targetSS;  
 
-  for(int b=0; i<2; i++){
+  for(int b=0; b<2; b++){
     if(b == 0){ targetSS = BOARD_ADS; startChan = 0; endChan = 8; }
     if(b == 1){ 
       if(!daisyPresent){ return; }
@@ -466,7 +467,7 @@ void OpenBCI_32_Daisy::changeChannelLeadOffDetect() // NEEDS DAISY? OR IS IT LOW
     byte P_setting = RREG(LOFF_SENSP,targetSS);
     byte N_setting = RREG(LOFF_SENSN,targetSS);
     
-    for(int i=startChan; i<endChan;i++){
+    for(int i=startChan; i<endChan; i++){
       if(leadOffSettings[i][PCHAN] == ON){
         bitSet(P_setting,i-startChan);
       }else{
@@ -484,9 +485,9 @@ void OpenBCI_32_Daisy::changeChannelLeadOffDetect() // NEEDS DAISY? OR IS IT LOW
 }
 
 // change the lead off detect settings for specified channel
-void OpenBCI_32_Daisy::changeChannelLeadOffDetect(byte N) // NEEDS DAISY? OR IS IT LOW-LEVEL? PASSED IN AS PARAMETER?
+void OpenBCI_32_Daisy::changeChannelLeadOffDetect(byte N) 
 {
-  byte setting, startChan, endChan, targetSS;  
+  byte setting, targetSS, startChan, endChan;
 
   if(N < 9){
     targetSS = BOARD_ADS; startChan = 0; endChan = 8; 
@@ -495,24 +496,25 @@ void OpenBCI_32_Daisy::changeChannelLeadOffDetect(byte N) // NEEDS DAISY? OR IS 
     targetSS = DAISY_ADS; startChan = 8; endChan = 16;
   }
 
+  N = constrain(N-1,startChan,endChan-1);
   SDATAC(targetSS); delay(1);      // exit Read Data Continuous mode to communicate with ADS
   byte P_setting = RREG(LOFF_SENSP,targetSS);
   byte N_setting = RREG(LOFF_SENSN,targetSS);
   
-  for(int i=startChan; i<endChan ;i++){
-    if(leadOffSettings[i][PCHAN] == ON){
-      bitSet(P_setting,i-startChan);
+  // for(int i=startChan; i<endChan ;i++){
+    if(leadOffSettings[N][PCHAN] == ON){
+      bitSet(P_setting,N-startChan);
     }else{
-      bitClear(P_setting,i-startChan);
+      bitClear(P_setting,N-startChan);
     }
-    if(leadOffSettings[i][NCHAN] == ON){
-      bitSet(N_setting,i-startChan);
+    if(leadOffSettings[N][NCHAN] == ON){
+      bitSet(N_setting,N-startChan);
     }else{
-      bitClear(N_setting,i-startChan);
+      bitClear(N_setting,N-startChan);
     }
    WREG(LOFF_SENSP,P_setting,targetSS);
    WREG(LOFF_SENSN,N_setting,targetSS);
-  }
+  // }
 } 
 
 void OpenBCI_32_Daisy::configureLeadOffDetection(byte amplitudeCode, byte freqCode) 
@@ -520,12 +522,12 @@ void OpenBCI_32_Daisy::configureLeadOffDetection(byte amplitudeCode, byte freqCo
 	amplitudeCode &= 0b00001100;  //only these two bits should be used
 	freqCode &= 0b00000011;  //only these two bits should be used
 	
-	byte setting, targetSS, startChan, endChan;
+	byte setting, targetSS;
 	for(int i=0; i<2; i++){
-    if(i == 0){ targetSS = BOARD_ADS; startChan = 0; endChan = 8; }
+    if(i == 0){ targetSS = BOARD_ADS; }
     if(i == 1){ 
       if(!daisyPresent){ return; }
-      targetSS = DAISY_ADS; startChan = 8; endChan = 16;
+      targetSS = DAISY_ADS; 
     }
   	setting = RREG(LOFF,targetSS); //get the current bias settings
   	//reconfigure the byte to get what we want
@@ -540,12 +542,12 @@ void OpenBCI_32_Daisy::configureLeadOffDetection(byte amplitudeCode, byte freqCo
 //Configure the test signals that can be inernally generated by the ADS1299
 void OpenBCI_32_Daisy::configureInternalTestSignal(byte amplitudeCode, byte freqCode) 
 {
-  byte setting, targetSS, startChan, endChan;
+  byte setting, targetSS;
   for(int i=0; i<2; i++){
-    if(i == 0){ targetSS = BOARD_ADS; startChan = 0; endChan = 8; }
+    if(i == 0){ targetSS = BOARD_ADS;}
     if(i == 1){ 
       if(daisyPresent == false){ return; }
-      targetSS = DAISY_ADS; startChan = 8; endChan = 16;
+      targetSS = DAISY_ADS; 
     }
   	if (amplitudeCode == ADSTESTSIG_NOCHANGE) amplitudeCode = (RREG(CONFIG2,targetSS) & (0b00000100));
   	if (freqCode == ADSTESTSIG_NOCHANGE) freqCode = (RREG(CONFIG2,targetSS) & (0b00000011));
@@ -555,13 +557,24 @@ void OpenBCI_32_Daisy::configureInternalTestSignal(byte amplitudeCode, byte freq
   	WREG(CONFIG2,setting,targetSS); delay(1);
 	}
 }
+
+void OpenBCI_32_Daisy::changeInputType(byte inputCode){
+
+  for(int i=0; i<numChannels; i++){
+    channelSettings[i][INPUT_TYPE_SET] = inputCode;
+  }
+
+  writeChannelSettings();
+
+}
  
 // Start continuous data acquisition
 void OpenBCI_32_Daisy::startADS(void) // NEEDS ADS ADDRESS, OR BOTH?
 {
   sampleCounter = 0;
   firstDataPacket = true;
-  RDATAC(BOTH_ADS); // enter Read Data Continuous mode
+  RDATAC(BOARD_ADS); // enter Read Data Continuous mode
+  RDATAC(DAISY_ADS);
 	delay(1);   
   START(BOTH_ADS);  // start the data acquisition
 	delay(1);
@@ -577,7 +590,7 @@ boolean OpenBCI_32_Daisy::isDataAvailable(void)
 // CALLED WHEN DRDY PIN IS ASSERTED. NEW ADS DATA AVAILABLE!
 void OpenBCI_32_Daisy::updateChannelData(){ // NEEDS DAISY IMPLIMENTATION
   updateBoardData();
-  if(daisyPresent) updateDaisyData();
+  if(daisyPresent) {updateDaisyData();}
 }
 
 void OpenBCI_32_Daisy::updateBoardData(){
@@ -632,7 +645,7 @@ void OpenBCI_32_Daisy::updateDaisyData(){
     int byteCounter = 0;
     
     if(daisyPresent && !firstDataPacket){
-      for(int i=0; i<24; i++){  // shift and average the byte arrays
+      for(int i=0; i<8; i++){  // shift and average the byte arrays
         lastDaisyChannelDataInt[i] = daisyChannelDataInt[i]; // remember the last samples
       }
     }
@@ -678,9 +691,11 @@ void OpenBCI_32_Daisy::updateDaisyData(){
 // Stop the continuous data acquisition
 void OpenBCI_32_Daisy::stopADS()  // NEEDS ADS ADDRESS, OR BOTH?
 {
-  STOP(BOTH_ADS);     // stop the data acquisition
+  STOP(BOARD_ADS);     // stop the data acquisition
+  STOP(DAISY_ADS);
 	delay(1);   		
-  SDATAC(BOTH_ADS);   // stop Read Data Continuous mode to communicate with ADS
+  SDATAC(BOARD_ADS);   // stop Read Data Continuous mode to communicate with ADS
+  SDATAC(DAISY_ADS);
 	delay(1);   
   isRunning = false;
 }

@@ -398,10 +398,8 @@ void loadLeadOffSettings(char c){
 }
 
 char getChannelNumber(char n){
-//  char x;
   if(n > '0' && n < '9'){
     n -= '1';
-//    return n;
   }
   switch(n){
     case 'Q': 
@@ -425,16 +423,16 @@ char getChannelNumber(char n){
   return n;
 }
 
-int changeChannelState_maintainRunningState(int chan, int start)
+void changeChannelState_maintainRunningState(byte chan, int start)
 {
   boolean is_running_when_called = is_running;
   int cur_outputType = outputType;
   
   //must stop running to change channel settings
   stopRunning();
-  if (start == true) {
+  if (start == 1) {
     OBCI.activateChannel(chan);
-  } else {
+  } else if (start == 0){
     OBCI.deactivateChannel(chan);
   }
   //restart, if it was running before
@@ -446,17 +444,15 @@ int changeChannelState_maintainRunningState(int chan, int start)
 void activateAllChannelsToTestCondition(byte testInputCode, byte amplitudeCode, byte freqCode)
 {
   boolean is_running_when_called = is_running;
-  int cur_outputType = outputType;
-  
+  int cur_outputType = outputType; 
   //must stop running to change channel settings
-  stopRunning();
+  stopRunning(); delay(10);
+  
   //set the test signal to the desired state
   OBCI.configureInternalTestSignal(amplitudeCode,freqCode);    
-  //loop over all channels to change their state
-  for (int chan=0; chan <OBCI.numChannels; chan++) {
-    OBCI.channelSettings[chan][INPUT_TYPE_SET] = testInputCode;
-  }
-  OBCI.writeChannelSettings();
+  //change input type settings for all channels
+  OBCI.changeInputType(testInputCode);
+  
   //restart, if it was running before
   if (is_running_when_called == true) {
     startRunning(cur_outputType);
@@ -471,7 +467,7 @@ int changeChannelLeadOffDetect_maintainRunningState(char chan)
   //must stop running to change channel settings
   stopRunning();
 
-  OBCI.changeChannelLeadOffDetect(chan);  // specify channel here??
+  OBCI.changeChannelLeadOffDetect(chan);  
   
   //restart, if it was running before
   if (is_running_when_called == true) {

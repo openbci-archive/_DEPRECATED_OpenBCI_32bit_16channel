@@ -61,7 +61,8 @@ public:
     void configureLeadOffDetection(byte,byte);
     void changeChannelLeadOffDetect(void);
     void changeChannelLeadOffDetect(byte);
-    void configureInternalTestSignal(byte,byte);  
+    void configureInternalTestSignal(byte,byte); 
+    void changeInputType(byte); 
     boolean isDataAvailable(void);
     void ADS_writeChannelData(void);
     // void ADS_printDeviceID(int);   // 
@@ -85,11 +86,9 @@ public:
     int lastDaisyChannelDataInt[8];
     int meanDaisyChannelDataInt[8];
     int numChannels;
-    char channelSettings[16][6];  // array to hold current channel settings
-    // char daisyChannelSettings[8][6];
-    char defaultChannelSettings[6];  // default channel settings
-    char leadOffSettings[16][2];  // used to control on/off of impedance measure for P and N side of each channel
-    // char daisyLeadOffSettings[8][2];
+    byte channelSettings[16][6];  // array to hold current channel settings
+    byte defaultChannelSettings[6];  // default channel settings
+    byte leadOffSettings[16][2];  // used to control on/off of impedance measure for P and N side of each channel
     boolean useInBias[16];        // used to remember if we were included in Bias before channel power down
     boolean useSRB2[16];
     boolean boardUseSRB1;             // used to keep track of if we are using SRB1
