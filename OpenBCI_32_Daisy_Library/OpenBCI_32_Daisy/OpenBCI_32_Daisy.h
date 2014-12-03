@@ -33,7 +33,6 @@ public:
     void setChannelsToECG(void);
     void reportDefaultChannelSettings(void);
     void printADSregisters(int);
-    // void printDAISYregisters(void);
     void WAKEUP(int);  // get out of low power mode
     void STANDBY(int); // go into low power mode
     void RESET(int);   // set all register values to default
@@ -53,7 +52,7 @@ public:
     void updateBoardData(void);
     void updateDaisyData(void);
     byte xfer(byte);        // SPI Transfer function 
-    void resetADS(int);    // reset all the ADS1299's settings.  Call however you'd like
+    void resetADS(int);     // reset all the ADS1299's settings
     void startADS(void);
     void stopADS(void);
     void activateChannel(byte);                  // enable the selected channel
@@ -70,7 +69,7 @@ public:
     void removeDaisy(void);
     void attachDaisy(void);
 
-    byte regData[24];          // array is used to mirror register data needed??
+    byte regData[24];          // array is used to mirror register data
     byte lastBoardDataRaw[24];
     byte boardChannelDataRaw[24];    // array to hold raw channel data
     byte meanBoardDataRaw[24];

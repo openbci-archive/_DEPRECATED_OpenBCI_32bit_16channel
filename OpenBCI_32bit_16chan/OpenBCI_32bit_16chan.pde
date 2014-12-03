@@ -1,7 +1,7 @@
 /*
  * 
  *  >>>> THIS CODE USED TO STREAM OpenBCI V3_32 DATA TO DONGLE <<<<
- *  >>>> May include the 60Hz notch filter by Chip Audette  <<<<
+ *  >>>> SUPPORTS 16 CHANNELS WITH DAISY MODULE EXPANSION CARD <<<<
  *
  * This code is written to target a PIC32MX250F128B with UDB32-MX2-DIP bootloader
  * To Program, user must manually reset the PIC32 on the OpenBCI 32bit Board
@@ -20,18 +20,14 @@
  * Until chipKIT or Diligent allows user selection of MOSI/MISO
  *
  * Any SDcard code is based on RawWrite example in SDFat library 
+ * If you use an SD card, it MUST be high speed class of 10 or Ultra High Speed class rated
+ *
  * ASCII commands are received on the serial port to configure and control
  * Serial protocol uses '+' immediately before and after the command character
  * We call this the 'burger' protocol. the '+' re the buns. Example:
  * To begin streaming data, send '+b+'
  * This software is provided as-is with no promise of workability
  * Use at your own risk, wysiwyg.
-
- TO DO
-  check that all functions are built correctly
-  verify, simplify for testing with GUI
-
-  Don't send serial unless the command to stop has passed down the radio chain!
  */
 
 #include <SD.h>
@@ -41,12 +37,11 @@
 
 
 //------------------------------------------------------------------------------
-//  << SD CARD BUSINESS >> has bee taken out. See OBCI_SD_LOG_CMRR 
-//  SD_SS on pin 7 defined in OpenBCI library
+//  << SD CARD BUSINESS >>
 boolean SDfileOpen = false;
 char fileSize = '0';  // SD file size indicator
 int blockCounter = 0;
-boolean writeToSDonly = false;
+boolean writeToSDonly = false;  // there's more in the SD_stuff tab
 //------------------------------------------------------------------------------
 //  << OpenBCI BUSINESS >>
 boolean is_running = false;    // this flag is set in serialEvent on reciept of ascii prompt
@@ -65,13 +60,13 @@ int outputType = OUTPUT_8_CHAN;  // default to 8 channels
 
 //------------------------------------------------------------------------------
 //  << LIS3DH Accelerometer Business >>
-//  LIS3DH_SS on pin 5 defined in OpenBCI library
 volatile boolean auxAvailable = false;
 volatile boolean addAccel = true;
 boolean useAccelOnly = false;
 //------------------------------------------------------------------------------
 //  << PUT FILTER STUFF HERE >>
 boolean useFilters = false;
+// add DSP if you like
 //------------------------------------------------------------------------------
 
 int LED = 11;  // blue LED alias
@@ -88,7 +83,7 @@ void setup(void) {
   OBCI.useAccel = true;  // option to add accelerometer dat to stream
   OBCI.useAux = false;   // option to add user data to stream not implimented yet
   
-  startFromScratch();
+  startFromScratch();  // initialize board(s) and send serial handshake to PC
 }
 
 
@@ -111,7 +106,7 @@ void loop() {
           Serial0.println(OBCI.sampleCounter,HEX); // verbosity
         }
       }  
-      OBCI.sendChannelData();  // serial fire hose
+      if(!writeToSDonly) {OBCI.sendChannelData();}  // serial fire hose
   }
   
 eventSerial();
@@ -236,7 +231,7 @@ void getCommand(char token){
         activateAllChannelsToTestCondition(ADSINPUT_TESTSIG,ADSTESTSIG_AMP_2X,ADSTESTSIG_PULSE_FAST); break;
 
 // SD CARD COMMANDS
-    //    5min     15min    30min    1hr      2hr      4hr      12hr     24hr    512blocks
+    //    5min     15min    30min    1hr      2hr      4hr      12hr     24hr    512blocks for testing
       case 'A': case'S': case'F': case'G': case'H': case'J': case'K': case'L': case 'a':
         fileSize = token; SDfileOpen = setupSDcard(fileSize); // 
         break;
@@ -287,19 +282,16 @@ void getCommand(char token){
 // STREAM DATA AND FILTER COMMANDS
       case 'b':  // stream data
         if(SDfileOpen) stampSD(ACTIVATE);
-        OBCI.enable_accel(RATE_25HZ);      // fire up the accelerometer
-        startRunning(outputType);       // turn on the fire hose
+        startRunning(outputType);       // turn on ADS and Accelerometer
         break;
      case 's':  // stop streaming data
         if(SDfileOpen) stampSD(DEACTIVATE);
-        OBCI.disable_accel();
-        stopRunning();
+        stopRunning();  // turn off ADS and Accelerometer
         break;
       case 'n':
         Serial0.println("write data to SD card only");
         if(SDfileOpen) {stampSD(ACTIVATE); writeToSDonly = true;}
-        OBCI.enable_accel(RATE_25HZ);      // fire up the accelerometer
-        startRunning(outputType);       // turn on the fire hose
+        startRunning(outputType);       // turn on ADS and Accelerometer
         break;
       case 'f':
          useFilters = true;  
@@ -322,7 +314,7 @@ void getCommand(char token){
   }// end of getCommand
   
 void sendEOT(){
-  Serial0.print("$$$");
+  Serial0.print("$$$");  // shake hands with the PC
 }
 
 void loadChannelSettings(char c){

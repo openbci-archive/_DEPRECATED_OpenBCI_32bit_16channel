@@ -1,6 +1,10 @@
 
 /*
-    BUILDING OUT THE LIBRARY-TO-RULE-THEM-ALL HERE
+    OpenBCI 32bit Library
+    Place the containing folder into your libraries folder insdie the mpide folder in your Documents folder
+    
+    This library will work with a single OpenBCI 32bit board, or 
+    an OpenBCI 32bit board with an OpenBCI Daisy Module attached.
 
 */
 
@@ -15,7 +19,7 @@ void OpenBCI_32_Daisy::initialize(){
   pinMode(DAISY_ADS, OUTPUT); digitalWrite(DAISY_ADS,HIGH); 
   pinMode(LIS3DH_SS,OUTPUT); digitalWrite(LIS3DH_SS,HIGH);
   spi.begin();
-  spi.setSpeed(4000000);  // try also 8MHz, 10MHz is max for LIS3DH
+  spi.setSpeed(4000000);  // use 4MHz for ADS and LIS3DH
   spi.setMode(DSPI_MODE0);  // default to SD card mode!
   initialize_ads(); // hard reset ADS, set pin directions 
   initialize_accel(SCALE_4G); // set pin directions, G scale, DRDY interrupt, power down
@@ -35,19 +39,19 @@ void OpenBCI_32_Daisy::printAllRegisters(){
 }
 
 void OpenBCI_32_Daisy::startStreaming(){  // needs daisy functionality
-  if(useAccel){enable_accel(RATE_50HZ);}
+  if(useAccel){enable_accel(RATE_50HZ);}  // check Definitions.h for other data rates
   startADS(); 
 } 
 
 void OpenBCI_32_Daisy::sendChannelData(){
   Serial0.write(sampleCounter); // 1 byte
-  ADS_writeChannelData();      // 24 bytes  // ADD ADS ADDRESS PARAMETER
-  LIS3DH_writeAxisData();      // 6 bytes
+  ADS_writeChannelData();       // 24 bytes  
+  LIS3DH_writeAxisData();       // 6 bytes
   sampleCounter++;
 }
 
 void OpenBCI_32_Daisy::stopStreaming(){
-  stopADS();  // ADD ADS ADDRESS PARAMETER
+  stopADS();  
   if(useAccel){disable_accel();}
 }
 
@@ -59,7 +63,7 @@ byte OpenBCI_32_Daisy::xfer(byte _data)
     return inByte;
 }
 
-//SPI slave select method
+//SPI chip select method
 void OpenBCI_32_Daisy::csLow(int SS)
 { // select an SPI slave to talk to
   switch(SS){
@@ -104,7 +108,7 @@ void OpenBCI_32_Daisy::csHigh(int SS)
 
 
 void OpenBCI_32_Daisy::initialize_ads(){
-// recommended power up sequence requiers Tpor (~32mS)	
+// recommended power up sequence requiers >Tpor (~32mS)	
     delay(50);				
     pinMode(ADS_RST,OUTPUT);  
     digitalWrite(ADS_RST,LOW);  // reset pin connected to both ADS ICs
@@ -116,7 +120,7 @@ void OpenBCI_32_Daisy::initialize_ads(){
     delay(40);
     resetADS(BOARD_ADS); // reset the on-board ADS registers, and stop DataContinuousMode
     delay(10);
-    WREG(CONFIG1,0xB6,BOARD_ADS); // tell on-board ADS to output the clk, set the data rate to 250SPS
+    WREG(CONFIG1,0xB6,BOARD_ADS); // tell on-board ADS to output its clk, set the data rate to 250SPS
     delay(40);
     resetADS(DAISY_ADS); // software reset daisy module if present
     delay(10);
@@ -193,7 +197,7 @@ void OpenBCI_32_Daisy::attachDaisy(void){
 }
 
 //reset all the ADS1299's settings. Stops all data acquisition
-void OpenBCI_32_Daisy::resetADS(int targetSS) //  NEEDS DAISY??
+void OpenBCI_32_Daisy::resetADS(int targetSS) 
 {
   int startChan, stopChan;
   if(targetSS == BOARD_ADS) {startChan = 1; stopChan = 8;}
@@ -207,7 +211,7 @@ void OpenBCI_32_Daisy::resetADS(int targetSS) //  NEEDS DAISY??
   } 
 }
 
-void OpenBCI_32_Daisy::setChannelsToDefault(void){  // NEEDS DAISY
+void OpenBCI_32_Daisy::setChannelsToDefault(void){ 
   for(int i=0; i<numChannels; i++){
     for(int j=0; j<6; j++){
       channelSettings[i][j] = defaultChannelSettings[j];
@@ -270,21 +274,21 @@ void OpenBCI_32_Daisy::writeChannelSettings(){
       WREG(CH1SET+(i-startChan),setting,targetSS);  // write this channel's register settings
       
       // add or remove this channel from inclusion in BIAS generation
-      setting = RREG(BIAS_SENSP,targetSS);       //get the current P bias settings
+      setting = RREG(BIAS_SENSP,targetSS);                   //get the current P bias settings
       if(channelSettings[i][BIAS_SET] == YES){
         bitSet(setting,i-startChan); useInBias[i] = true;    //add this channel to the bias generation
       }else{
-        bitClear(setting,i-startChan); useInBias[i] = false; // remove this channel from bias generation
+        bitClear(setting,i-startChan); useInBias[i] = false; //remove this channel from bias generation
       }
-      WREG(BIAS_SENSP,setting,targetSS); delay(1); //send the modified byte back to the ADS
+      WREG(BIAS_SENSP,setting,targetSS); delay(1);           //send the modified byte back to the ADS
 
-      setting = RREG(BIAS_SENSN,targetSS);       //get the current N bias settings
+      setting = RREG(BIAS_SENSN,targetSS);                   //get the current N bias settings
       if(channelSettings[i][BIAS_SET] == YES){
         bitSet(setting,i-startChan);    //set this channel's bit to add it to the bias generation
       }else{
         bitClear(setting,i-startChan);  // clear this channel's bit to remove from bias generation
       }
-      WREG(BIAS_SENSN,setting,targetSS); delay(1); //send the modified byte back to the ADS
+      WREG(BIAS_SENSN,setting,targetSS); delay(1);           //send the modified byte back to the ADS
        
       if(channelSettings[i][SRB1_SET] == YES){
         use_SRB1 = true;  // if any of the channel setting closes SRB1, it is closed for all
@@ -309,12 +313,12 @@ void OpenBCI_32_Daisy::writeChannelSettings(){
 }
 
 // write settings for a SPECIFIC channel on a given ADS board
-void OpenBCI_32_Daisy::writeChannelSettings(byte N){  // NEEDS DAISY contingent upon daisyAttached
+void OpenBCI_32_Daisy::writeChannelSettings(byte N){  
   
   byte setting, startChan, endChan, targetSS;  
-  if(N < 9){
+  if(N < 9){  // channels 1-8 on board
     targetSS = BOARD_ADS; startChan = 0; endChan = 8; 
-  }else{
+  }else{      // channels 9-16 on daisy module
     if(!daisyPresent) { return; }
     targetSS = DAISY_ADS; startChan = 8; endChan = 16;
   }
@@ -383,10 +387,7 @@ void OpenBCI_32_Daisy::deactivateChannel(byte N)
     if(!daisyPresent) { return; }
     targetSS = DAISY_ADS; startChan = 8; endChan = 16;
   }
-  // if ((N < 1) || (N > 8)) return;  //check the inputs  
-  //proceed...first, disable any data collection
   SDATAC(targetSS); delay(1);      // exit Read Data Continuous mode to communicate with ADS
-  //shut down the channel
   N = constrain(N-1,startChan,endChan-1);  //subtracts 1 so that we're counting from 0, not 1
 
   setting = RREG(CH1SET+(N-startChan),targetSS); delay(1); // get the current channel settings
@@ -407,7 +408,7 @@ void OpenBCI_32_Daisy::deactivateChannel(byte N)
   changeChannelLeadOffDetect(N+1);
 } 
 
-void OpenBCI_32_Daisy::activateChannel(byte N) // NEEDS DAISY? OR IS IT LOW-LEVEL? PASSED IN AS PARAMETER?
+void OpenBCI_32_Daisy::activateChannel(byte N) 
 {
 	byte setting, startChan, endChan, targetSS;  
   if(N < 9){
@@ -418,7 +419,7 @@ void OpenBCI_32_Daisy::activateChannel(byte N) // NEEDS DAISY? OR IS IT LOW-LEVE
   }
 
   N = constrain(N-1,startChan,endChan-1);  // 0-7 or 8-15
-  //proceed...first, disable any data collection
+
   SDATAC(targetSS);  // exit Read Data Continuous mode to communicate with ADS
   setting = 0x00;
   setting |= channelSettings[N][GAIN_SET]; // gain
@@ -452,7 +453,7 @@ void OpenBCI_32_Daisy::activateChannel(byte N) // NEEDS DAISY? OR IS IT LOW-LEVE
 }
 
 // change the lead off detect settings for all channels
-void OpenBCI_32_Daisy::changeChannelLeadOffDetect() // NEEDS DAISY? OR IS IT LOW-LEVEL? PASSED IN AS PARAMETER?
+void OpenBCI_32_Daisy::changeChannelLeadOffDetect() 
 {
   byte setting, startChan, endChan, targetSS;  
 
@@ -501,7 +502,6 @@ void OpenBCI_32_Daisy::changeChannelLeadOffDetect(byte N)
   byte P_setting = RREG(LOFF_SENSP,targetSS);
   byte N_setting = RREG(LOFF_SENSN,targetSS);
   
-  // for(int i=startChan; i<endChan ;i++){
     if(leadOffSettings[N][PCHAN] == ON){
       bitSet(P_setting,N-startChan);
     }else{
@@ -514,7 +514,6 @@ void OpenBCI_32_Daisy::changeChannelLeadOffDetect(byte N)
     }
    WREG(LOFF_SENSP,P_setting,targetSS);
    WREG(LOFF_SENSN,N_setting,targetSS);
-  // }
 } 
 
 void OpenBCI_32_Daisy::configureLeadOffDetection(byte amplitudeCode, byte freqCode) 
@@ -573,8 +572,7 @@ void OpenBCI_32_Daisy::startADS(void) // NEEDS ADS ADDRESS, OR BOTH?
 {
   sampleCounter = 0;
   firstDataPacket = true;
-  RDATAC(BOARD_ADS); // enter Read Data Continuous mode
-  RDATAC(DAISY_ADS);
+  RDATAC(BOTH_ADS); // enter Read Data Continuous mode
 	delay(1);   
   START(BOTH_ADS);  // start the data acquisition
 	delay(1);
@@ -588,7 +586,7 @@ boolean OpenBCI_32_Daisy::isDataAvailable(void)
 }
   
 // CALLED WHEN DRDY PIN IS ASSERTED. NEW ADS DATA AVAILABLE!
-void OpenBCI_32_Daisy::updateChannelData(){ // NEEDS DAISY IMPLIMENTATION
+void OpenBCI_32_Daisy::updateChannelData(){ 
   updateBoardData();
   if(daisyPresent) {updateDaisyData();}
 }
@@ -626,7 +624,7 @@ void OpenBCI_32_Daisy::updateBoardData(){
   }
   if(daisyPresent && !firstDataPacket){
     byteCounter = 0;
-    for(int i=0; i<8; i++){
+    for(int i=0; i<8; i++){   // take the average of this and the last sample
       meanBoardChannelDataInt[i] = (lastBoardChannelDataInt[i] + boardChannelDataInt[i])/2;
     }
     for(int i=0; i<8; i++){  // place the average values in the meanRaw array
@@ -634,7 +632,7 @@ void OpenBCI_32_Daisy::updateBoardData(){
         meanBoardDataRaw[byteCounter] = (meanBoardChannelDataInt[i] >> (b*8)) & 0xFF;
         byteCounter++;
       }
-    }     // the function that sends data to the radio will look for odd/even sampleCounter
+    }    
   }
     
   if(firstDataPacket == true){firstDataPacket = false;}
@@ -664,7 +662,7 @@ void OpenBCI_32_Daisy::updateDaisyData(){
       }
     }
     csHigh(DAISY_ADS);        //  close SPI
-  // need to convert 24bit to 32bit if using the filter
+  // need to convert 24bit to 32bit
   for(int i=0; i<8; i++){     // convert 3 byte 2's compliment to 4 byte 2's compliment 
     if(bitRead(daisyChannelDataInt[i],23) == 1){ 
       daisyChannelDataInt[i] |= 0xFF000000;
@@ -674,7 +672,7 @@ void OpenBCI_32_Daisy::updateDaisyData(){
   }
   if(daisyPresent && !firstDataPacket){
     byteCounter = 0;
-    for(int i=0; i<8; i++){
+    for(int i=0; i<8; i++){   // average this sample with the last sample
       meanDaisyChannelDataInt[i] = (lastDaisyChannelDataInt[i] + daisyChannelDataInt[i])/2;
     }
     for(int i=0; i<8; i++){  // place the average values in the meanRaw array
@@ -682,31 +680,29 @@ void OpenBCI_32_Daisy::updateDaisyData(){
         meanDaisyDataRaw[byteCounter] = (meanDaisyChannelDataInt[i] >> (b*8)) & 0xFF;
         byteCounter++;
       }
-    }     // the function that sends data to the radio will look for odd/even sampleCounter
+    }   
   }  
     
   if(firstDataPacket == true){firstDataPacket = false;}
 }
 
 // Stop the continuous data acquisition
-void OpenBCI_32_Daisy::stopADS()  // NEEDS ADS ADDRESS, OR BOTH?
+void OpenBCI_32_Daisy::stopADS()  
 {
-  STOP(BOARD_ADS);     // stop the data acquisition
-  STOP(DAISY_ADS);
+  STOP(BOTH_ADS);     // stop the data acquisition
 	delay(1);   		
-  SDATAC(BOARD_ADS);   // stop Read Data Continuous mode to communicate with ADS
-  SDATAC(DAISY_ADS);
+  SDATAC(BOTH_ADS);   // stop Read Data Continuous mode to communicate with ADS
 	delay(1);   
   isRunning = false;
 }
 
 
 //write as binary each channel's data
-void OpenBCI_32_Daisy::ADS_writeChannelData() // DAISY??
+void OpenBCI_32_Daisy::ADS_writeChannelData() 
 { 
-  //CHECK SAMPLE ODD-EVEN AND SEND THE APPROPRIATE ADS DATA
+  
   if(daisyPresent){
-    if(sampleCounter % 2 != 0){
+    if(sampleCounter % 2 != 0){ //CHECK SAMPLE ODD-EVEN AND SEND THE APPROPRIATE ADS DATA
       for (int i=0; i<24; i++){ 
         Serial0.write(meanBoardDataRaw[i]); // send board data on odd samples
       }
@@ -744,7 +740,6 @@ byte OpenBCI_32_Daisy::ADS_getDeviceID(int targetSS) {      // simple hello worl
 }
   
 //System Commands
-// THIS CAN TAKE THE SS PARAMETER AND DO BOARD, DAISY, BOTH
 void OpenBCI_32_Daisy::WAKEUP(int targetSS) {
     csLow(targetSS); 
     xfer(_WAKEUP);
@@ -791,7 +786,7 @@ void OpenBCI_32_Daisy::SDATAC(int targetSS) {
 }
 
 
-//  THIS NEEDS CLEANING AND UPDATING TO THE NEW FORMAT!!!!!!
+//  THIS NEEDS CLEANING AND UPDATING TO THE NEW FORMAT
 void OpenBCI_32_Daisy::RDATA(int targetSS) {          //  use in Stop Read Continuous mode when DRDY goes low
   byte inByte;            //  to read in one sample of the channels
     csLow(targetSS);        //  open SPI
@@ -925,27 +920,26 @@ void OpenBCI_32_Daisy::WREGS(byte _address, byte _numRegistersMinusOne, int targ
 
 
 void OpenBCI_32_Daisy::initialize_accel(byte g){ 
-  byte setting =  g | 0x08;           // mask the g range for REG4    
-  // pinMode(LIS3DH_SS,OUTPUT); digitalWrite(LIS3DH_SS,HIGH);
+  byte setting =  g | 0x08;           // mask the g range for REG4   
   pinMode(LIS3DH_DRDY,INPUT);   // setup dataReady interupt from accelerometer
   LIS3DH_write(TMP_CFG_REG, 0x00);  // DISable ADC inputs, enable temperature sensor
   LIS3DH_write(CTRL_REG1, 0x08);    // disable accel, low power mode
   LIS3DH_write(CTRL_REG2, 0x00);    // don't use the high pass filter
   LIS3DH_write(CTRL_REG3, 0x00);    // no interrupts yet
-  LIS3DH_write(CTRL_REG4, setting);   // set scale to g, high resolution
+  LIS3DH_write(CTRL_REG4, setting); // set scale to g, high resolution
   LIS3DH_write(CTRL_REG5, 0x00);    // no boot, no fifo
   LIS3DH_write(CTRL_REG6, 0x00);
   LIS3DH_write(REFERENCE, 0x00);
   DRDYpinValue = lastDRDYpinValue = digitalRead(LIS3DH_DRDY);  // take a reading to seed these variables
 }
   
-void OpenBCI_32_Daisy::enable_accel(byte Hz){    // ADD ABILITY TO SET FREQUENCY & RESOLUTION
+void OpenBCI_32_Daisy::enable_accel(byte Hz){   
   for(int i=0; i<3; i++){
     axisData[i] = 0;            // clear the axisData array so we don't get any stale news
   }
   byte setting = Hz | 0x07;           // mask the desired frequency
   LIS3DH_write(CTRL_REG1, setting);   // set freq and enable all axis in normal mode
-  LIS3DH_write(CTRL_REG3, 0x10);      // enable DRDY1 on INT1 (tied to Arduino pin3, LIS3DH_DRDY)
+  LIS3DH_write(CTRL_REG3, 0x10);      // enable DRDY1 on INT1 (tied to PIC pin 0, LIS3DH_DRDY)
 }
 
 void OpenBCI_32_Daisy::disable_accel(){
@@ -984,27 +978,27 @@ void OpenBCI_32_Daisy::LIS3DH_writeAxisData(void){
 
 byte OpenBCI_32_Daisy::LIS3DH_read(byte reg){
   reg |= READ_REG;                    // add the READ_REG bit
-  csLow(LIS3DH_SS);                            // take spi
+  csLow(LIS3DH_SS);                   // take spi
   spi.transfer(reg);                  // send reg to read
   byte inByte = spi.transfer(0x00);   // retrieve data
-  csHigh(LIS3DH_SS);                           // release spi
+  csHigh(LIS3DH_SS);                  // release spi
   return inByte;  
 }
 
 void OpenBCI_32_Daisy::LIS3DH_write(byte reg, byte value){
-  csLow(LIS3DH_SS);                  // take spi
+  csLow(LIS3DH_SS);         // take spi
   spi.transfer(reg);        // send reg to write
   spi.transfer(value);      // write value
-  csHigh(LIS3DH_SS);                 // release spi
+  csHigh(LIS3DH_SS);        // release spi
 }
 
 int OpenBCI_32_Daisy::LIS3DH_read16(byte reg){    // use for reading axis data. 
   int inData;  
   reg |= READ_REG | READ_MULTI;   // add the READ_REG and READ_MULTI bits
-  csLow(LIS3DH_SS);                 // take spi
+  csLow(LIS3DH_SS);               // take spi
   spi.transfer(reg);              // send reg to start reading from
   inData = spi.transfer(0x00) | (spi.transfer(0x00) << 8);  // get the data and arrange it
-  csHigh(LIS3DH_SS);                       // release spi
+  csHigh(LIS3DH_SS);              // release spi
   return inData;
 }
 
